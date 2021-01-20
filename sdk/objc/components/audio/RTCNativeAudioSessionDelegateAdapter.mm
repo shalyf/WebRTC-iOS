@@ -75,6 +75,21 @@
   _observer->OnCanPlayOrRecordChange(canPlayOrRecord);
 }
 
+- (void)audioSession:(RTC_OBJC_TYPE(RTCAudioSession) *)session 
+    didChangeMicrophoneMute:(BOOL)isMicrophoneMute {
+  _observer->OnMicrophoneMuteChange(isMicrophoneMute);
+}
+
+- (void)audioSession:(RTC_OBJC_TYPE(RTCAudioSession) *)session 
+    didChangeSpeakerMute:(BOOL)isSpeakerMute {
+  _observer->OnSpeakerMuteChange(isSpeakerMute);
+}
+
+- (void)audioSession:(RTC_OBJC_TYPE(RTCAudioSession) *)session 
+    didChangeAudioCapturable:(BOOL)isAudioCapturable {
+  _observer->OnAudioCapturableChange(isAudioCapturable);
+}
+
 - (void)audioSessionDidStartPlayOrRecord:(RTC_OBJC_TYPE(RTCAudioSession) *)session {
 }
 

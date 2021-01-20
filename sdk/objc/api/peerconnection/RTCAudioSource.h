@@ -27,6 +27,11 @@ RTC_OBJC_EXPORT
 // is available on the surface exposed by webrtc.
 @property(nonatomic, assign) double volume;
 
+- (void)captureData:(NSData *)data
+     withNumSamples:(int)numSamples
+        numChannels:(int)numChannels
+             volume:(double)volume;
+
 @end
 
 NS_ASSUME_NONNULL_END

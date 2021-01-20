@@ -62,6 +62,7 @@
   std::unique_ptr<rtc::Thread> _networkThread;
   std::unique_ptr<rtc::Thread> _workerThread;
   std::unique_ptr<rtc::Thread> _signalingThread;
+  rtc::scoped_refptr<webrtc::AudioDeviceModule> _audioDeviceModule;
   BOOL _hasStartedAecDump;
 }
 
@@ -69,7 +70,8 @@
 
 - (rtc::scoped_refptr<webrtc::AudioDeviceModule>)audioDeviceModule {
 #if defined(WEBRTC_IOS)
-  return webrtc::CreateAudioDeviceModule();
+  if (!_audioDeviceModule) _audioDeviceModule = webrtc::CreateAudioDeviceModule();
+  return _audioDeviceModule;
 #else
   return nullptr;
 #endif
@@ -227,7 +229,7 @@
   CopyConstraintsIntoAudioOptions(nativeConstraints.get(), &options);
 
   rtc::scoped_refptr<webrtc::AudioSourceInterface> source =
-      _nativeFactory->CreateAudioSource(options);
+      _nativeFactory->CreateAudioSource([self audioDeviceModule], options);
   return [[RTC_OBJC_TYPE(RTCAudioSource) alloc] initWithFactory:self nativeAudioSource:source];
 }
 

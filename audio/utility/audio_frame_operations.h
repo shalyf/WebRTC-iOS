@@ -98,6 +98,11 @@ class AudioFrameOperations {
   static int Scale(float left, float right, AudioFrame* frame);
 
   static int ScaleWithSat(float scale, AudioFrame* frame);
+
+  static int ScaleWithSat(float scale,
+                          int16_t* audio,
+                          size_t samples_per_channel,
+                          size_t num_channels);
 };
 
 }  // namespace webrtc

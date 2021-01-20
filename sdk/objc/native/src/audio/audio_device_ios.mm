@@ -27,6 +27,7 @@
 #include "rtc_base/time_utils.h"
 #include "system_wrappers/include/field_trial.h"
 #include "system_wrappers/include/metrics.h"
+#include "audio/utility/audio_frame_operations.h"
 
 #import "base/RTCLogging.h"
 #import "components/audio/RTCAudioSession+Private.h"
@@ -67,6 +68,9 @@ enum AudioDeviceMessageType : uint32_t {
   kMessageTypeInterruptionEnd,
   kMessageTypeValidRouteChange,
   kMessageTypeCanPlayOrRecordChange,
+  kMessageTypeMicrophoneMuteChange,
+  kMessageTypeSpeakerMuteChange,
+  kMessageTypeAudioCapturableChange,
   kMessageTypePlayoutGlitchDetected,
   kMessageOutputVolumeChange,
 };
@@ -103,10 +107,15 @@ static void LogDeviceInfo() {
 AudioDeviceIOS::AudioDeviceIOS()
     : audio_device_buffer_(nullptr),
       audio_unit_(nullptr),
+      audio_mixer_(AudioMixerImpl::Create()),
+      mixed_frame_(std::make_unique<AudioFrame>()),
       recording_(0),
       playing_(0),
       initialized_(false),
       audio_is_initialized_(false),
+      is_microphone_mute_(false),
+      is_speaker_mute_(false),
+      is_audio_capturable_(false),
       is_interrupted_(false),
       has_configured_session_(false),
       num_detected_playout_glitches_(0),
@@ -156,6 +165,7 @@ AudioDeviceGeneric::InitStatus AudioDeviceIOS::Init() {
       [RTC_OBJC_TYPE(RTCAudioSessionConfiguration) webRTCConfiguration];
   playout_parameters_.reset(config.sampleRate, config.outputNumberOfChannels);
   record_parameters_.reset(config.sampleRate, config.inputNumberOfChannels);
+  // record_parameters_.reset(44100, 2);
   // Ensure that the audio device buffer (ADB) knows about the internal audio
   // parameters. Note that, even if we are unable to get a mono audio session,
   // we will always tell the I/O audio unit to do a channel format conversion
@@ -361,9 +371,82 @@ void AudioDeviceIOS::OnCanPlayOrRecordChange(bool can_play_or_record) {
                 new rtc::TypedMessageData<bool>(can_play_or_record));
 }
 
+void AudioDeviceIOS::OnMicrophoneMuteChange(bool is_microphone_mute) {
+  RTC_DCHECK(thread_);
+  thread_->Post(RTC_FROM_HERE,
+                this,
+                kMessageTypeMicrophoneMuteChange,
+                new rtc::TypedMessageData<bool>(is_microphone_mute));
+}
+
+void AudioDeviceIOS::OnSpeakerMuteChange(bool is_speaker_mute) {
+  RTC_DCHECK(thread_);
+  thread_->Post(RTC_FROM_HERE,
+                this,
+                kMessageTypeSpeakerMuteChange,
+                new rtc::TypedMessageData<bool>(is_speaker_mute));
+}
+
+void AudioDeviceIOS::OnAudioCapturableChange(bool is_audio_capturable) {
+  RTC_DCHECK(thread_);
+  thread_->Post(RTC_FROM_HERE,
+                this,
+                kMessageTypeAudioCapturableChange,
+                new rtc::TypedMessageData<bool>(is_audio_capturable));
+}
+
 void AudioDeviceIOS::OnChangedOutputVolume() {
   RTC_DCHECK(thread_);
   thread_->Post(RTC_FROM_HERE, this, kMessageOutputVolumeChange);
+}
+
+void AudioDeviceIOS::CaptureData(const int16_t* audio_data, size_t* params) {
+  if (!capture_audio_buffer_source_) return;
+
+  if (!is_audio_capturable_) {
+    RTCLog(@"is_audio_capturable_ = false, ignore capture audio data");
+    capture_audio_buffer_source_->Clear();
+    return;
+  }
+
+  size_t num_samples = *params;
+  size_t num_channels = *(params + 1);
+  float volume = static_cast<double>(*(params + 2)) / 100;
+  // capture_audio_buffer_source_->SetVolume(static_cast<double>(volume) / 100);
+
+  // RTCLog(@"CaptureData -> num_samples: %zu, num_channels: %zu", num_samples, num_channels);
+  // capture_audio_buffer_source_->Clear();
+  size_t dstChannels = record_parameters_.channels();
+  if (dstChannels < num_channels) {
+    // capture_audio_buffer_source_->SetSize(num_samples, dstChannels);
+    // memset(capture_buffer_, 0, AudioFrame::kMaxDataSizeBytes);
+    
+    capture_buffer_.SetSize(num_samples);
+    // 合并声道
+    AudioFrameOperations::DownmixChannels(
+        audio_data, num_channels, num_samples, dstChannels, capture_buffer_.data());
+  } else {
+    // capture_audio_buffer_source_->AppendData(audio_data, num_samples, num_channels);
+    capture_buffer_.SetData(audio_data, num_samples);
+  }
+
+  // 降低音量
+  if (volume >= 0 && volume < 0.99f) {
+    AudioFrameOperations::ScaleWithSat(volume, capture_buffer_.data(), num_samples, dstChannels);
+  }
+
+  // 缓存过多的情况下，用新的数据覆盖旧数据
+  if (capture_audio_buffer_source_->size() >= 5120) {
+    RTCLog(@"capture cache buffer is too large -> size: %zu, num_samples: %zu, num_channels: %zu", capture_audio_buffer_source_->size(), num_samples, num_channels);
+    // 旧的设备每次传输的数据会超过1024，新的设备一般一次都是1024
+    if (num_samples >= capture_audio_buffer_source_->size()) {
+      capture_audio_buffer_source_->SetData(capture_buffer_.data(), num_samples, dstChannels);
+    }
+  } else {
+    capture_audio_buffer_source_->AppendData(capture_buffer_.data(), num_samples, dstChannels);
+  }
+
+  capture_buffer_.Clear();
 }
 
 OSStatus AudioDeviceIOS::OnDeliverRecordedData(AudioUnitRenderActionFlags* flags,
@@ -376,11 +459,27 @@ OSStatus AudioDeviceIOS::OnDeliverRecordedData(AudioUnitRenderActionFlags* flags
   // Simply return if recording is not enabled.
   if (!rtc::AtomicOps::AcquireLoad(&recording_)) return result;
 
+  if (is_microphone_mute_ && !is_audio_capturable_) return result;
+
+  // RTCLog(@"RecordData -> num_frames: %u, bus_number: %u", (uint32_t)num_frames, (uint32_t)bus_number);
+
+  // Simply return if microphone is muted.
+  if (is_microphone_mute_) {
+    // Get a pointer to the capture audio when it's not empty and send it to the WebRTC ADB.
+    if (is_audio_capturable_ && !capture_audio_buffer_source_->empty()) {
+      size_t num_elements = num_frames * record_parameters_.channels();
+      rtc::ArrayView<const int16_t> audio_buffer =
+          capture_audio_buffer_source_->GetAudioBuffer(num_elements);
+      fine_audio_buffer_->DeliverRecordedData(audio_buffer, kFixedRecordDelayEstimate);
+    }
+    return noErr;
+  }
+
   // Set the size of our own audio buffer and clear it first to avoid copying
   // in combination with potential reallocations.
   // On real iOS devices, the size will only be set once (at first callback).
-  record_audio_buffer_.Clear();
-  record_audio_buffer_.SetSize(num_frames);
+  record_audio_buffer_source_->Clear();
+  record_audio_buffer_source_->SetSize(num_frames, record_parameters_.channels());
 
   // Allocate AudioBuffers to be used as storage for the received audio.
   // The AudioBufferList structure works as a placeholder for the
@@ -392,8 +491,8 @@ OSStatus AudioDeviceIOS::OnDeliverRecordedData(AudioUnitRenderActionFlags* flags
   AudioBuffer* audio_buffer = &audio_buffer_list.mBuffers[0];
   audio_buffer->mNumberChannels = record_parameters_.channels();
   audio_buffer->mDataByteSize =
-      record_audio_buffer_.size() * VoiceProcessingAudioUnit::kBytesPerSample;
-  audio_buffer->mData = reinterpret_cast<int8_t*>(record_audio_buffer_.data());
+      record_audio_buffer_source_->size() * VoiceProcessingAudioUnit::kBytesPerSample;
+  audio_buffer->mData = reinterpret_cast<int8_t*>(record_audio_buffer_source_->data());
 
   // Obtain the recorded audio samples by initiating a rendering cycle.
   // Since it happens on the input bus, the |io_data| parameter is a reference
@@ -407,10 +506,64 @@ OSStatus AudioDeviceIOS::OnDeliverRecordedData(AudioUnitRenderActionFlags* flags
     return result;
   }
 
-  // Get a pointer to the recorded audio and send it to the WebRTC ADB.
-  // Use the FineAudioBuffer instance to convert between native buffer size
-  // and the 10ms buffer size used by WebRTC.
-  fine_audio_buffer_->DeliverRecordedData(record_audio_buffer_, kFixedRecordDelayEstimate);
+  if (is_audio_capturable_ && !capture_audio_buffer_source_->empty()) {
+    // audio mixer
+    int16_t* rdata = record_audio_buffer_source_->data();
+    const size_t rsize = record_audio_buffer_source_->size();
+    // RTCLog(@"mixer -> record_audio_size: %ld, capture_audio_size: %ld", rsize, capture_audio_buffer_source_->size());
+
+    rtc::ArrayView<const int16_t> cbuffer = capture_audio_buffer_source_->GetAudioBuffer(rsize);
+    const int16_t* cdata = cbuffer.data();
+    const size_t csize = cbuffer.size();
+
+    for (size_t i = 0; i < rsize; i++) {
+      int32_t sum = (i > csize) ? rdata[i] : rdata[i] + cdata[i];
+      sum = std::min(sum, INT16_MAX);
+      sum = std::max(sum, INT16_MIN);
+      rdata[i] = sum;
+    }
+  }
+
+  fine_audio_buffer_->DeliverRecordedData(record_audio_buffer_source_->audio_buffer(),
+                                          kFixedRecordDelayEstimate);
+
+
+
+
+  // if (!is_audio_capturable_) {
+  //   fine_audio_buffer_->DeliverRecordedData(record_audio_buffer_source_->audio_buffer(),
+  //                                           kFixedRecordDelayEstimate);
+  //   return noErr;
+  // }
+
+  // const size_t num_elements_10ms = static_cast<size_t>(
+  //     (record_parameters_.sample_rate() * AudioMixerImpl::kFrameDurationInMs) / 1000);
+
+  // // RTCLog(@"mixer -> start num_elements: %zu, samples: (r:%d,c:%d)",
+  // //        num_elements_10ms,
+  // //        record_audio_buffer_source_->num_samples(),
+  // //        capture_audio_buffer_source_->num_samples());
+
+  // while (record_audio_buffer_source_->size() >= num_elements_10ms) {
+  //   // RTCLog(@"mixer -> size: (r:%zu,c:%zu), muted: (r:%d,c:%d)",
+  //   //        record_audio_buffer_source_->size(),
+  //   //        capture_audio_buffer_source_->size(),
+  //   //        record_audio_buffer_source_->muted(),
+  //   //        capture_audio_buffer_source_->muted());
+  //   audio_mixer_->Mix(record_parameters_.channels(), mixed_frame_.get());
+  //   // RTCLog(@"mixer -> mixed_frame.muted: %d, size: %zu",
+  //   //        mixed_frame_->muted(),
+  //   //        mixed_frame_->samples_per_channel());
+  //   if (mixed_frame_->muted()) continue;
+  //   mixed_buffer_.AppendData(mixed_frame_->data(), mixed_frame_->samples_per_channel());
+  // }
+  // // RTCLog(@"mixer -> end");
+
+  // if (!mixed_buffer_.empty()) {
+  //   fine_audio_buffer_->DeliverRecordedData(mixed_buffer_, kFixedRecordDelayEstimate);
+  //   mixed_buffer_.Clear();
+  // }
+
   return noErr;
 }
 
@@ -420,14 +573,16 @@ OSStatus AudioDeviceIOS::OnGetPlayoutData(AudioUnitRenderActionFlags* flags,
                                           UInt32 num_frames,
                                           AudioBufferList* io_data) {
   RTC_DCHECK_RUN_ON(&io_thread_checker_);
+
   // Verify 16-bit, noninterleaved mono PCM signal format.
   RTC_DCHECK_EQ(1, io_data->mNumberBuffers);
   AudioBuffer* audio_buffer = &io_data->mBuffers[0];
   RTC_DCHECK_EQ(1, audio_buffer->mNumberChannels);
 
   // Produce silence and give audio unit a hint about it if playout is not
-  // activated.
-  if (!rtc::AtomicOps::AcquireLoad(&playing_)) {
+  // activated or speaker is mute.
+  // if (!rtc::AtomicOps::AcquireLoad(&playing_)) {
+  if (!rtc::AtomicOps::AcquireLoad(&playing_) || is_speaker_mute_) {
     const size_t size_in_bytes = audio_buffer->mDataByteSize;
     RTC_CHECK_EQ(size_in_bytes / VoiceProcessingAudioUnit::kBytesPerSample, num_frames);
     *flags |= kAudioUnitRenderAction_OutputIsSilence;
@@ -490,6 +645,24 @@ void AudioDeviceIOS::OnMessage(rtc::Message* msg) {
       delete data;
       break;
     }
+    case kMessageTypeMicrophoneMuteChange: {
+      rtc::TypedMessageData<bool>* data = static_cast<rtc::TypedMessageData<bool>*>(msg->pdata);
+      HandleMicrophoneMuteChange(data->data());
+      delete data;
+      break;
+    }
+    case kMessageTypeSpeakerMuteChange: {
+      rtc::TypedMessageData<bool>* data = static_cast<rtc::TypedMessageData<bool>*>(msg->pdata);
+      HandleSpeakerMuteChange(data->data());
+      delete data;
+      break;
+    }
+    case kMessageTypeAudioCapturableChange: {
+      rtc::TypedMessageData<bool>* data = static_cast<rtc::TypedMessageData<bool>*>(msg->pdata);
+      HandleAudioCapturableChange(data->data());
+      delete data;
+      break;
+    }
     case kMessageTypePlayoutGlitchDetected:
       HandlePlayoutGlitchDetected();
       break;
@@ -546,6 +719,27 @@ void AudioDeviceIOS::HandleValidRouteChange() {
 void AudioDeviceIOS::HandleCanPlayOrRecordChange(bool can_play_or_record) {
   RTCLog(@"Handling CanPlayOrRecord change to: %d", can_play_or_record);
   UpdateAudioUnit(can_play_or_record);
+}
+
+void AudioDeviceIOS::HandleMicrophoneMuteChange(bool is_microphone_mute) {
+  RTC_DCHECK_RUN_ON(&thread_checker_);
+  RTCLog(@"Handling MicrophoneMute change to %d", is_microphone_mute);
+  is_microphone_mute_ = is_microphone_mute;
+  record_audio_buffer_source_->SetMute(is_microphone_mute);
+}
+
+void AudioDeviceIOS::HandleSpeakerMuteChange(bool is_speaker_mute) {
+  RTC_DCHECK_RUN_ON(&thread_checker_);
+  RTCLog(@"Handling SpeakerMute change to %d", is_speaker_mute);
+  is_speaker_mute_ = is_speaker_mute;
+}
+
+void AudioDeviceIOS::HandleAudioCapturableChange(bool is_audio_capturable) {
+  RTC_DCHECK_RUN_ON(&thread_checker_);
+  RTCLog(@"Handling AudioCapturable change to %d", is_audio_capturable);
+  is_audio_capturable_ = is_audio_capturable;
+  capture_audio_buffer_source_->SetMute(!is_audio_capturable);
+  capture_audio_buffer_source_->Clear();
 }
 
 void AudioDeviceIOS::HandleSampleRateChange(float sample_rate) {
@@ -713,6 +907,7 @@ void AudioDeviceIOS::SetupAudioBuffersForActiveAudioSession() {
   playout_parameters_.reset(sample_rate, playout_parameters_.channels(), io_buffer_duration);
   RTC_DCHECK(playout_parameters_.is_complete());
   record_parameters_.reset(sample_rate, record_parameters_.channels(), io_buffer_duration);
+  // record_parameters_.reset(record_parameters_.sample_rate(), record_parameters_.channels(), io_buffer_duration);
   RTC_DCHECK(record_parameters_.is_complete());
   RTC_LOG(LS_INFO) << " frames per I/O buffer: " << playout_parameters_.frames_per_buffer();
   RTC_LOG(LS_INFO) << " bytes per I/O buffer: " << playout_parameters_.GetBytesPerBuffer();
@@ -726,6 +921,19 @@ void AudioDeviceIOS::SetupAudioBuffersForActiveAudioSession() {
   // the native audio unit buffer size.
   RTC_DCHECK(audio_device_buffer_);
   fine_audio_buffer_.reset(new FineAudioBuffer(audio_device_buffer_));
+
+  if (record_audio_buffer_source_) {
+    audio_mixer_->RemoveSource(record_audio_buffer_source_.get());
+  }
+  if (capture_audio_buffer_source_) {
+    audio_mixer_->RemoveSource(capture_audio_buffer_source_.get());
+  }
+
+  record_audio_buffer_source_.reset(new AudioBufferSource(1111, sample_rate));
+  capture_audio_buffer_source_.reset(new AudioBufferSource(2222, sample_rate));
+
+  audio_mixer_->AddSource(record_audio_buffer_source_.get());
+  audio_mixer_->AddSource(capture_audio_buffer_source_.get());
 }
 
 bool AudioDeviceIOS::CreateAudioUnit() {

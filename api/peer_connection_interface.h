@@ -1465,6 +1465,7 @@ class RTC_EXPORT PeerConnectionFactoryInterface
   // Creates an AudioSourceInterface.
   // |options| decides audio processing settings.
   virtual rtc::scoped_refptr<AudioSourceInterface> CreateAudioSource(
+      AudioDeviceModule* adm,
       const cricket::AudioOptions& options) = 0;
 
   // Creates a new local VideoTrack. The same |source| can be used in several

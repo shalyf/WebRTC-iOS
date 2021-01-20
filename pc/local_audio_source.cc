@@ -9,7 +9,7 @@
  */
 
 #include "pc/local_audio_source.h"
-
+#include "rtc_base/logging.h"
 #include "rtc_base/ref_counted_object.h"
 
 using webrtc::MediaSourceInterface;
@@ -17,18 +17,26 @@ using webrtc::MediaSourceInterface;
 namespace webrtc {
 
 rtc::scoped_refptr<LocalAudioSource> LocalAudioSource::Create(
+    AudioDeviceModule* adm,
     const cricket::AudioOptions* audio_options) {
   rtc::scoped_refptr<LocalAudioSource> source(
       new rtc::RefCountedObject<LocalAudioSource>());
-  source->Initialize(audio_options);
+  source->Initialize(adm, audio_options);
+  RTC_LOG(INFO) << __FUNCTION__;
   return source;
 }
 
-void LocalAudioSource::Initialize(const cricket::AudioOptions* audio_options) {
+void LocalAudioSource::Initialize(
+  AudioDeviceModule* adm,
+  const cricket::AudioOptions* audio_options) {
   if (!audio_options)
     return;
-
+  audioDeviceModule_ = adm;
   options_ = *audio_options;
+}
+
+void LocalAudioSource::CaptureData(const int16_t* audio_data, size_t* params) {
+  audioDeviceModule_->CaptureData(audio_data, params);
 }
 
 }  // namespace webrtc

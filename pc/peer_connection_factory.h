@@ -82,6 +82,7 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface {
       const std::string& stream_id) override;
 
   rtc::scoped_refptr<AudioSourceInterface> CreateAudioSource(
+      AudioDeviceModule* adm,
       const cricket::AudioOptions& options) override;
 
   rtc::scoped_refptr<VideoTrackInterface> CreateVideoTrack(

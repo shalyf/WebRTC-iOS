@@ -13,8 +13,10 @@
 
 #include <memory>
 
+#include "audio_buffer_source.h"
 #include "audio_session_observer.h"
 #include "modules/audio_device/audio_device_generic.h"
+#include "modules/audio_mixer/audio_mixer_impl.h"
 #include "rtc_base/buffer.h"
 #include "rtc_base/thread.h"
 #include "rtc_base/thread_annotations.h"
@@ -144,6 +146,9 @@ class AudioDeviceIOS : public AudioDeviceGeneric,
   void OnInterruptionEnd() override;
   void OnValidRouteChange() override;
   void OnCanPlayOrRecordChange(bool can_play_or_record) override;
+  void OnMicrophoneMuteChange(bool is_microphone_mute) override;
+  void OnSpeakerMuteChange(bool is_speaker_mute) override;
+  void OnAudioCapturableChange(bool is_audio_capturable) override;
   void OnChangedOutputVolume() override;
 
   // VoiceProcessingAudioUnitObserver methods.
@@ -163,12 +168,17 @@ class AudioDeviceIOS : public AudioDeviceGeneric,
 
   bool IsInterrupted();
 
+  void CaptureData(const int16_t* audio_data, size_t* params);
+
  private:
   // Called by the relevant AudioSessionObserver methods on |thread_|.
   void HandleInterruptionBegin();
   void HandleInterruptionEnd();
   void HandleValidRouteChange();
   void HandleCanPlayOrRecordChange(bool can_play_or_record);
+  void HandleMicrophoneMuteChange(bool is_microphone_mute);
+  void HandleSpeakerMuteChange(bool is_speaker_mute);
+  void HandleAudioCapturableChange(bool is_audio_capturable);
   void HandleSampleRateChange(float sample_rate);
   void HandlePlayoutGlitchDetected();
   void HandleOutputVolumeChange();
@@ -256,7 +266,18 @@ class AudioDeviceIOS : public AudioDeviceGeneric,
   // On real iOS devices, the size will be fixed and set once. For iOS
   // simulators, the size can vary from callback to callback and the size
   // will be changed dynamically to account for this behavior.
-  rtc::BufferT<int16_t> record_audio_buffer_;
+  // rtc::BufferT<int16_t> record_audio_buffer_;
+  // // 外部数据使用的buffer
+  // rtc::BufferT<int16_t> capture_audio_buffer_;
+
+  // 替代record_audio_buffer_和capture_audio_buffer_
+  std::unique_ptr<AudioBufferSource> record_audio_buffer_source_;
+  std::unique_ptr<AudioBufferSource> capture_audio_buffer_source_;
+
+  rtc::scoped_refptr<AudioMixerImpl> audio_mixer_;
+  std::unique_ptr<AudioFrame> mixed_frame_;
+  rtc::BufferT<int16_t> mixed_buffer_;
+  rtc::BufferT<int16_t> capture_buffer_;
 
   // Set to 1 when recording is active and 0 otherwise.
   volatile int recording_;
@@ -270,6 +291,12 @@ class AudioDeviceIOS : public AudioDeviceGeneric,
   // Set to true after successful call to InitRecording() or InitPlayout(),
   // false otherwise.
   bool audio_is_initialized_;
+
+  bool is_microphone_mute_;
+
+  bool is_speaker_mute_;
+
+  bool is_audio_capturable_;
 
   // Set to true if audio session is interrupted, false otherwise.
   bool is_interrupted_;

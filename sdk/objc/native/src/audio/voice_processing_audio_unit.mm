@@ -86,6 +86,7 @@ const UInt32 VoiceProcessingAudioUnit::kBytesPerSample = 2;
 
 bool VoiceProcessingAudioUnit::Init() {
   RTC_DCHECK_EQ(state_, kInitRequired);
+  RTCLog(@"Init audio unit.");
 
   // Create an audio component description to identify the Voice Processing
   // I/O audio unit.
@@ -117,6 +118,24 @@ bool VoiceProcessingAudioUnit::Init() {
   if (result != noErr) {
     DisposeAudioUnit();
     RTCLogError(@"Failed to enable input on input scope of input element. "
+                 "Error=%ld.",
+                (long)result);
+    return false;
+  }
+
+  // Specify the callback to be called by the I/O thread to us when input audio
+  // is available. The recorded samples can then be obtained by calling the
+  // AudioUnitRender() method.
+  AURenderCallbackStruct input_callback;
+  input_callback.inputProc = OnDeliverRecordedData;
+  input_callback.inputProcRefCon = this;
+  result = AudioUnitSetProperty(vpio_unit_,
+                                kAudioOutputUnitProperty_SetInputCallback,
+                                kAudioUnitScope_Global, kInputBus,
+                                &input_callback, sizeof(input_callback));
+  if (result != noErr) {
+    DisposeAudioUnit();
+    RTCLogError(@"Failed to specify the input callback on the input bus. "
                  "Error=%ld.",
                 (long)result);
     return false;
@@ -160,24 +179,6 @@ bool VoiceProcessingAudioUnit::Init() {
   if (result != noErr) {
     DisposeAudioUnit();
     RTCLogError(@"Failed to disable buffer allocation on the input bus. "
-                 "Error=%ld.",
-                (long)result);
-    return false;
-  }
-
-  // Specify the callback to be called by the I/O thread to us when input audio
-  // is available. The recorded samples can then be obtained by calling the
-  // AudioUnitRender() method.
-  AURenderCallbackStruct input_callback;
-  input_callback.inputProc = OnDeliverRecordedData;
-  input_callback.inputProcRefCon = this;
-  result = AudioUnitSetProperty(vpio_unit_,
-                                kAudioOutputUnitProperty_SetInputCallback,
-                                kAudioUnitScope_Global, kInputBus,
-                                &input_callback, sizeof(input_callback));
-  if (result != noErr) {
-    DisposeAudioUnit();
-    RTCLogError(@"Failed to specify the input callback on the input bus. "
                  "Error=%ld.",
                 (long)result);
     return false;
@@ -315,7 +316,23 @@ bool VoiceProcessingAudioUnit::Start() {
   RTC_DCHECK_GE(state_, kUninitialized);
   RTCLog(@"Starting audio unit.");
 
-  OSStatus result = AudioOutputUnitStart(vpio_unit_);
+  OSStatus result;
+  int failed_start_attempts = 0;
+  result = AudioOutputUnitStart(vpio_unit_);
+  while (result != noErr) {
+    AudioOutputUnitStop(vpio_unit_);
+    RTCLogError(@"Failed to start audio unit. Error=%ld", (long)result);
+    ++failed_start_attempts;
+    if (failed_start_attempts == kMaxNumberOfAudioUnitInitializeAttempts) {
+      // Max number of start attempts exceeded, hence abort.
+      RTCLogError(@"Too many start attempts.");
+      return false;
+    }
+    RTCLog(@"Pause 100ms and try audio unit start again...");
+    [NSThread sleepForTimeInterval:0.1f];
+    result = AudioOutputUnitStart(vpio_unit_);
+  }
+
   if (result != noErr) {
     RTCLogError(@"Failed to start audio unit. Error=%ld", (long)result);
     return false;

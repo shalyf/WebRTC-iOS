@@ -649,6 +649,10 @@ AudioDeviceModuleIOS::AudioDeviceModuleIOS()
     return ok;
   }
 
+  void AudioDeviceModuleIOS::CaptureData(const int16_t* audio_data, size_t* params) {
+    audio_device_->CaptureData(audio_data, params);
+  }
+
 #if defined(WEBRTC_IOS)
   int AudioDeviceModuleIOS::GetPlayoutAudioParameters(
       AudioParameters* params) const {

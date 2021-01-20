@@ -43,6 +43,9 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   BOOL _isActive;
   BOOL _useManualAudio;
   BOOL _isAudioEnabled;
+  BOOL _isMicrophoneMute;
+  BOOL _isSpeakerMute;
+  BOOL _isAudioCapturable;
   BOOL _canPlayOrRecord;
   BOOL _isInterrupted;
 }
@@ -184,6 +187,54 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 - (BOOL)isAudioEnabled {
   @synchronized(self) {
     return _isAudioEnabled;
+  }
+}
+
+- (void)setIsMicrophoneMute:(BOOL)isMicrophoneMute {
+  @synchronized(self) {
+    // if (_isMicrophoneMute == isMicrophoneMute) {
+    //   return;
+    // }
+    _isMicrophoneMute = isMicrophoneMute;
+  }
+  [self notifyDidChangeMicrophoneMute];
+}
+
+- (BOOL)isMicrophoneMute {
+  @synchronized(self) {
+    return _isMicrophoneMute;
+  }
+}
+
+- (void)setIsSpeakerMute:(BOOL)isSpeakerMute {
+  @synchronized(self) {
+    // if (_isSpeakerMute == isSpeakerMute) {
+    //   return;
+    // }
+    _isSpeakerMute = isSpeakerMute;
+  }
+  [self notifyDidChangeSpeakerMute];
+}
+
+- (BOOL)isSpeakerMute {
+  @synchronized(self) {
+    return _isSpeakerMute;
+  }
+}
+
+- (void)setIsAudioCapturable:(BOOL)isAudioCapturable {
+  @synchronized(self) {
+    // if (_isAudioCapturable == isAudioCapturable) {
+    //   return;
+    // }
+    _isAudioCapturable = isAudioCapturable;
+  }
+  [self notifyDidChangeAudioCapturable];
+}
+
+- (BOOL)isAudioCapturable {
+  @synchronized(self) {
+    return _isAudioCapturable;
   }
 }
 
@@ -934,6 +985,33 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
     SEL sel = @selector(audioSession:didChangeCanPlayOrRecord:);
     if ([delegate respondsToSelector:sel]) {
       [delegate audioSession:self didChangeCanPlayOrRecord:canPlayOrRecord];
+    }
+  }
+}
+
+- (void)notifyDidChangeMicrophoneMute {
+  for (auto delegate : self.delegates) {
+    SEL sel = @selector(audioSession:didChangeMicrophoneMute:);
+    if ([delegate respondsToSelector:sel]) {
+      [delegate audioSession:self didChangeMicrophoneMute:self.isMicrophoneMute];
+    }
+  }
+}
+
+- (void)notifyDidChangeSpeakerMute {
+  for (auto delegate : self.delegates) {
+    SEL sel = @selector(audioSession:didChangeSpeakerMute:);
+    if ([delegate respondsToSelector:sel]) {
+      [delegate audioSession:self didChangeSpeakerMute:self.isSpeakerMute];
+    }
+  }
+}
+
+- (void)notifyDidChangeAudioCapturable {
+  for (auto delegate : self.delegates) {
+    SEL sel = @selector(audioSession:didChangeAudioCapturable:);
+    if ([delegate respondsToSelector:sel]) {
+      [delegate audioSession:self didChangeAudioCapturable:self.isAudioCapturable];
     }
   }
 }

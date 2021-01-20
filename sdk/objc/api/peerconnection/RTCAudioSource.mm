@@ -49,4 +49,15 @@
   _nativeAudioSource->SetVolume(volume);
 }
 
+- (void)captureData:(NSData *)data
+     withNumSamples:(int)numSamples
+        numChannels:(int)numChannels
+             volume:(double)volume {
+  const int16_t *newBytes = static_cast<const int16_t *>([data bytes]);
+  size_t params[] = {static_cast<size_t>(numSamples),
+                     static_cast<size_t>(numChannels),
+                     static_cast<size_t>(volume * 100)};
+  _nativeAudioSource->CaptureData(newBytes, params);
+}
+
 @end

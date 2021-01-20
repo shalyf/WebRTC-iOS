@@ -170,11 +170,13 @@ RtpCapabilities PeerConnectionFactory::GetRtpReceiverCapabilities(
   RTC_CHECK_NOTREACHED();
 }
 
-rtc::scoped_refptr<AudioSourceInterface>
-PeerConnectionFactory::CreateAudioSource(const cricket::AudioOptions& options) {
+rtc::scoped_refptr<AudioSourceInterface> 
+PeerConnectionFactory::CreateAudioSource(
+  AudioDeviceModule* adm,
+  const cricket::AudioOptions& options) {
   RTC_DCHECK(signaling_thread()->IsCurrent());
   rtc::scoped_refptr<LocalAudioSource> source(
-      LocalAudioSource::Create(&options));
+      LocalAudioSource::Create(adm, &options));
   return source;
 }
 

@@ -291,4 +291,16 @@ int AudioFrameOperations::ScaleWithSat(float scale, AudioFrame* frame) {
   }
   return 0;
 }
+
+int AudioFrameOperations::ScaleWithSat(float scale,
+                                       int16_t* audio,
+                                       size_t samples_per_channel,
+                                       size_t num_channels) {
+  RTC_DCHECK_GT(num_channels, 0);
+  RTC_DCHECK_GT(samples_per_channel, 0);
+  for (size_t i = 0; i < samples_per_channel * num_channels; i++) {
+    audio[i] = rtc::saturated_cast<int16_t>(scale * audio[i]);
+  }
+  return 0;
+}
 }  // namespace webrtc

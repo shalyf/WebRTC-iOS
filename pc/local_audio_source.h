@@ -15,6 +15,7 @@
 #include "api/media_stream_interface.h"
 #include "api/notifier.h"
 #include "api/scoped_refptr.h"
+#include "modules/audio_device/include/audio_device.h"
 
 // LocalAudioSource implements AudioSourceInterface.
 // This contains settings for switching audio processing on and off.
@@ -25,6 +26,7 @@ class LocalAudioSource : public Notifier<AudioSourceInterface> {
  public:
   // Creates an instance of LocalAudioSource.
   static rtc::scoped_refptr<LocalAudioSource> Create(
+      AudioDeviceModule* adm,
       const cricket::AudioOptions* audio_options);
 
   SourceState state() const override { return kLive; }
@@ -35,14 +37,19 @@ class LocalAudioSource : public Notifier<AudioSourceInterface> {
   void AddSink(AudioTrackSinkInterface* sink) override {}
   void RemoveSink(AudioTrackSinkInterface* sink) override {}
 
+  void CaptureData(const int16_t* audio_data, size_t* params) override;
+
  protected:
   LocalAudioSource() {}
   ~LocalAudioSource() override {}
 
  private:
-  void Initialize(const cricket::AudioOptions* audio_options);
+  void Initialize(
+    AudioDeviceModule* adm,
+    const cricket::AudioOptions* audio_options);
 
   cricket::AudioOptions options_;
+  rtc::scoped_refptr<webrtc::AudioDeviceModule> audioDeviceModule_;
 };
 
 }  // namespace webrtc

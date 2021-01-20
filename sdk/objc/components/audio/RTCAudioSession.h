@@ -65,6 +65,12 @@ RTC_OBJC_EXPORT
 - (void)audioSession:(RTC_OBJC_TYPE(RTCAudioSession) *)session
     didChangeCanPlayOrRecord:(BOOL)canPlayOrRecord;
 
+- (void)audioSession:(RTCAudioSession *)session didChangeMicrophoneMute:(BOOL)isMicrophoneMute;
+
+- (void)audioSession:(RTCAudioSession *)session didChangeSpeakerMute:(BOOL)isSpeakerMute;
+
+- (void)audioSession:(RTCAudioSession *)session didChangeAudioCapturable:(BOOL)isAudioCapturable;
+
 /** Called on a WebRTC thread when the audio device is notified to begin
  *  playback or recording.
  */
@@ -160,6 +166,12 @@ RTC_OBJC_EXPORT
  *  we are able to prevent the abrupt cutoff.
  */
 @property(nonatomic, assign) BOOL isAudioEnabled;
+
+@property(nonatomic, assign) BOOL isMicrophoneMute;
+
+@property(nonatomic, assign) BOOL isSpeakerMute;
+
+@property(nonatomic, assign) BOOL isAudioCapturable;
 
 // Proxy properties.
 @property(readonly) NSString *category;

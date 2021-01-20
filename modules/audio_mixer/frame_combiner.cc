@@ -152,6 +152,8 @@ void FrameCombiner::Combine(rtc::ArrayView<AudioFrame* const> mix_list,
   SetAudioFrameFields(mix_list, number_of_channels, sample_rate,
                       number_of_streams, audio_frame_for_mixing);
 
+  if (mix_list.empty()) return;
+
   const size_t samples_per_channel = static_cast<size_t>(
       (sample_rate * webrtc::AudioMixerImpl::kFrameDurationInMs) / 1000);
 
