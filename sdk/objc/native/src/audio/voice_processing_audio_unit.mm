@@ -84,9 +84,9 @@ VoiceProcessingAudioUnit::~VoiceProcessingAudioUnit() {
 
 const UInt32 VoiceProcessingAudioUnit::kBytesPerSample = 2;
 
-bool VoiceProcessingAudioUnit::Init() {
+bool VoiceProcessingAudioUnit::Init(bool disable_input) {
   RTC_DCHECK_EQ(state_, kInitRequired);
-  RTCLog(@"Init audio unit.");
+  RTCLog(@"Init audio unit, disable_input: %d.", disable_input);
 
   // Create an audio component description to identify the Voice Processing
   // I/O audio unit.
@@ -110,35 +110,37 @@ bool VoiceProcessingAudioUnit::Init() {
     return false;
   }
 
-  // Enable input on the input scope of the input element.
-  UInt32 enable_input = 1;
-  result = AudioUnitSetProperty(vpio_unit_, kAudioOutputUnitProperty_EnableIO,
-                                kAudioUnitScope_Input, kInputBus, &enable_input,
-                                sizeof(enable_input));
-  if (result != noErr) {
-    DisposeAudioUnit();
-    RTCLogError(@"Failed to enable input on input scope of input element. "
-                 "Error=%ld.",
-                (long)result);
-    return false;
-  }
+  if (!disable_input) {
+    // Enable input on the input scope of the input element.
+    UInt32 enable_input = 1;
+    result = AudioUnitSetProperty(vpio_unit_, kAudioOutputUnitProperty_EnableIO,
+                                  kAudioUnitScope_Input, kInputBus, &enable_input,
+                                  sizeof(enable_input));
+    if (result != noErr) {
+      DisposeAudioUnit();
+      RTCLogError(@"Failed to enable input on input scope of input element. "
+                   "Error=%ld.",
+                  (long)result);
+      return false;
+    }
 
-  // Specify the callback to be called by the I/O thread to us when input audio
-  // is available. The recorded samples can then be obtained by calling the
-  // AudioUnitRender() method.
-  AURenderCallbackStruct input_callback;
-  input_callback.inputProc = OnDeliverRecordedData;
-  input_callback.inputProcRefCon = this;
-  result = AudioUnitSetProperty(vpio_unit_,
-                                kAudioOutputUnitProperty_SetInputCallback,
-                                kAudioUnitScope_Global, kInputBus,
-                                &input_callback, sizeof(input_callback));
-  if (result != noErr) {
-    DisposeAudioUnit();
-    RTCLogError(@"Failed to specify the input callback on the input bus. "
-                 "Error=%ld.",
-                (long)result);
-    return false;
+    // Specify the callback to be called by the I/O thread to us when input audio
+    // is available. The recorded samples can then be obtained by calling the
+    // AudioUnitRender() method.
+    AURenderCallbackStruct input_callback;
+    input_callback.inputProc = OnDeliverRecordedData;
+    input_callback.inputProcRefCon = this;
+    result = AudioUnitSetProperty(vpio_unit_,
+                                  kAudioOutputUnitProperty_SetInputCallback,
+                                  kAudioUnitScope_Global, kInputBus,
+                                  &input_callback, sizeof(input_callback));
+    if (result != noErr) {
+      DisposeAudioUnit();
+      RTCLogError(@"Failed to specify the input callback on the input bus. "
+                   "Error=%ld.",
+                  (long)result);
+      return false;
+    }
   }
 
   // Enable output on the output scope of the output element.

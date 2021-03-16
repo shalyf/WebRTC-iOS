@@ -725,7 +725,9 @@ void AudioDeviceIOS::HandleMicrophoneMuteChange(bool is_microphone_mute) {
   RTC_DCHECK_RUN_ON(&thread_checker_);
   RTCLog(@"Handling MicrophoneMute change to %d", is_microphone_mute);
   is_microphone_mute_ = is_microphone_mute;
-  record_audio_buffer_source_->SetMute(is_microphone_mute);
+  if (record_audio_buffer_source_) {
+    record_audio_buffer_source_->SetMute(is_microphone_mute);
+  }
 }
 
 void AudioDeviceIOS::HandleSpeakerMuteChange(bool is_speaker_mute) {
@@ -738,8 +740,10 @@ void AudioDeviceIOS::HandleAudioCapturableChange(bool is_audio_capturable) {
   RTC_DCHECK_RUN_ON(&thread_checker_);
   RTCLog(@"Handling AudioCapturable change to %d", is_audio_capturable);
   is_audio_capturable_ = is_audio_capturable;
-  capture_audio_buffer_source_->SetMute(!is_audio_capturable);
-  capture_audio_buffer_source_->Clear();
+  if (capture_audio_buffer_source_) {
+    capture_audio_buffer_source_->SetMute(!is_audio_capturable);
+    capture_audio_buffer_source_->Clear();
+  }
 }
 
 void AudioDeviceIOS::HandleSampleRateChange(float sample_rate) {
@@ -931,16 +935,19 @@ void AudioDeviceIOS::SetupAudioBuffersForActiveAudioSession() {
 
   record_audio_buffer_source_.reset(new AudioBufferSource(1111, sample_rate));
   capture_audio_buffer_source_.reset(new AudioBufferSource(2222, sample_rate));
+  
+  record_audio_buffer_source_->SetMute(is_microphone_mute_);
+  capture_audio_buffer_source_->SetMute(!is_audio_capturable_);
 
   audio_mixer_->AddSource(record_audio_buffer_source_.get());
   audio_mixer_->AddSource(capture_audio_buffer_source_.get());
 }
 
-bool AudioDeviceIOS::CreateAudioUnit() {
+bool AudioDeviceIOS::CreateAudioUnit(bool disable_input) {
   RTC_DCHECK(!audio_unit_);
 
   audio_unit_.reset(new VoiceProcessingAudioUnit(this));
-  if (!audio_unit_->Init()) {
+  if (!audio_unit_->Init(disable_input)) {
     audio_unit_.reset();
     return false;
   }
@@ -1070,12 +1077,13 @@ bool AudioDeviceIOS::InitPlayOrRecord() {
   LOGI() << "InitPlayOrRecord";
   RTC_DCHECK_RUN_ON(&thread_checker_);
 
+  RTC_OBJC_TYPE(RTCAudioSession)* session = [RTC_OBJC_TYPE(RTCAudioSession) sharedInstance];
+
   // There should be no audio unit at this point.
-  if (!CreateAudioUnit()) {
+  if (!CreateAudioUnit(session.isAudioSendDisabled)) {
     return false;
   }
 
-  RTC_OBJC_TYPE(RTCAudioSession)* session = [RTC_OBJC_TYPE(RTCAudioSession) sharedInstance];
   // Subscribe to audio session events.
   [session pushDelegate:audio_session_observer_];
   is_interrupted_ = session.isInterrupted ? true : false;

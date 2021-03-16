@@ -69,7 +69,7 @@ class VoiceProcessingAudioUnit {
   // audio. The selected stream format is selected to avoid internal resampling
   // and to match the 10ms callback rate for WebRTC as well as possible.
   // Does not intialize the audio unit.
-  bool Init();
+  bool Init(bool disable_input);
 
   VoiceProcessingAudioUnit::State GetState() const;
 

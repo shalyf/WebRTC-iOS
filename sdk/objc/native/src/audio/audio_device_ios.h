@@ -195,7 +195,7 @@ class AudioDeviceIOS : public AudioDeviceGeneric,
   void SetupAudioBuffersForActiveAudioSession();
 
   // Creates the audio unit.
-  bool CreateAudioUnit();
+  bool CreateAudioUnit(bool disable_input);
 
   // Updates the audio unit state based on current state.
   void UpdateAudioUnit(bool can_play_or_record);

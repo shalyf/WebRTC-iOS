@@ -43,6 +43,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   BOOL _isActive;
   BOOL _useManualAudio;
   BOOL _isAudioEnabled;
+  BOOL _isAudioSendDisabled;
   BOOL _isMicrophoneMute;
   BOOL _isSpeakerMute;
   BOOL _isAudioCapturable;
@@ -187,6 +188,21 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 - (BOOL)isAudioEnabled {
   @synchronized(self) {
     return _isAudioEnabled;
+  }
+}
+
+- (void)setIsAudioSendDisabled:(BOOL)isAudioSendDisabled {
+  @synchronized(self) {
+    if (_isAudioSendDisabled == isAudioSendDisabled) {
+      return;
+    }
+    _isAudioSendDisabled = isAudioSendDisabled;
+  }
+}
+
+- (BOOL)isAudioSendDisabled {
+  @synchronized(self) {
+    return _isAudioSendDisabled;
   }
 }
 

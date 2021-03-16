@@ -167,10 +167,26 @@ RTC_OBJC_EXPORT
  */
 @property(nonatomic, assign) BOOL isAudioEnabled;
 
+/** 如果设为YES，WebRTC将不会初始化声音输入单元，不会请求麦克风权限，不会发送任何声音数据。
+ *  此属性最好在添加AudioTrack之前设置，否则可能将会无效。
+ *  如果设为NO，WebRTC将会正常初始化声音输入单元。
+ */
+@property(nonatomic, assign) BOOL isAudioSendDisabled;
+
+/** 如果设为YES，WebRTC将会忽略掉麦克风数据，如果isAudioCapturable=YES，则只发送外部声音数据，否则什么都不会发送。
+ *  如果设为NO，WebRTC将会使用麦克风数据，如果isAudioCapturable=YES，则讲麦克风数据和外部声音数据混合后发出，否则只发送麦克风数据。
+ */
 @property(nonatomic, assign) BOOL isMicrophoneMute;
 
+/** 如果设为YES，WebRTC将会忽略掉接收到的声音数据，扬声器不会发出声音。
+ *  如果设为NO，WebRTC将会使用通过扬声器播放接收到的声音数据。
+ */
 @property(nonatomic, assign) BOOL isSpeakerMute;
 
+/** 如果设为YES，WebRTC将会接受外部声音数据，可通过[RTCAudioSource captureData:withNumSamples:numChannels:volume:]提供声音数据。
+ *  外部声音数据将会与麦克风数据进行混合，然后传递给发送队列。
+ *  如果设为NO，WebRTC将不会接受外部声音数据，仅使用麦克风数据。
+ */
 @property(nonatomic, assign) BOOL isAudioCapturable;
 
 // Proxy properties.
