@@ -105,6 +105,11 @@ RTC_OBJC_EXPORT
     failedToSetActive:(BOOL)active
                 error:(NSError *)error;
 
+- (void)audioSessionDidStartFileRecording:(RTC_OBJC_TYPE(RTCAudioSession) *)audioSession
+                               destination:(const char *)destinationPath;
+
+- (void)audioSessionDidStopFileRecording:(RTC_OBJC_TYPE(RTCAudioSession) *)session;
+
 @end
 
 /** This is a protocol used to inform RTCAudioSession when the audio session
@@ -183,7 +188,8 @@ RTC_OBJC_EXPORT
  */
 @property(nonatomic, assign) BOOL isSpeakerMute;
 
-/** 如果设为YES，WebRTC将会接受外部声音数据，可通过[RTCAudioSource captureData:withNumSamples:numChannels:volume:]提供声音数据。
+/** 如果设为YES，WebRTC将会接受外部声音数据，可通过[RTCAudioSource
+ * captureData:withNumSamples:numChannels:volume:]提供声音数据。
  *  外部声音数据将会与麦克风数据进行混合，然后传递给发送队列。
  *  如果设为NO，WebRTC将不会接受外部声音数据，仅使用麦克风数据。
  */
@@ -267,6 +273,10 @@ RTC_OBJC_EXPORT
                      error:(NSError **)outError;
 - (BOOL)setOutputDataSource:(AVAudioSessionDataSourceDescription *)dataSource
                       error:(NSError **)outError;
+/// 录制扬声器声音到文件
+- (void)startFileRecording:(NSString *)destinationPath;
+/// 结束录制
+- (void)stopFileRecording;
 @end
 
 @interface RTC_OBJC_TYPE (RTCAudioSession)

@@ -38,6 +38,10 @@ class AudioSessionObserver {
 
   virtual void OnChangedOutputVolume() = 0;
 
+  virtual void OnStartFileRecording(const char *destination_path) = 0;
+
+  virtual void OnStopFileRecording() = 0;
+
  protected:
   virtual ~AudioSessionObserver() {}
 };

@@ -29,6 +29,7 @@ RTC_FWD_DECL_OBJC_CLASS(RTCNativeAudioSessionDelegateAdapter);
 namespace webrtc {
 
 class FineAudioBuffer;
+class AudioFileRecorder;
 
 namespace ios_adm {
 
@@ -150,6 +151,8 @@ class AudioDeviceIOS : public AudioDeviceGeneric,
   void OnSpeakerMuteChange(bool is_speaker_mute) override;
   void OnAudioCapturableChange(bool is_audio_capturable) override;
   void OnChangedOutputVolume() override;
+  void OnStartFileRecording(const char* destination_path) override;
+  void OnStopFileRecording() override;
 
   // VoiceProcessingAudioUnitObserver methods.
   OSStatus OnDeliverRecordedData(AudioUnitRenderActionFlags* flags,
@@ -182,6 +185,8 @@ class AudioDeviceIOS : public AudioDeviceGeneric,
   void HandleSampleRateChange(float sample_rate);
   void HandlePlayoutGlitchDetected();
   void HandleOutputVolumeChange();
+  void HandleStartFileRecording(std::string destination_path);
+  void HandleStopFileRecording();
 
   // Uses current |playout_parameters_| and |record_parameters_| to inform the
   // audio device buffer (ADB) about our internal audio parameters.
@@ -244,6 +249,9 @@ class AudioDeviceIOS : public AudioDeviceGeneric,
 
   // The AudioUnit used to play and record audio.
   std::unique_ptr<VoiceProcessingAudioUnit> audio_unit_;
+
+  // 用于录制扬声器声音
+  std::unique_ptr<AudioFileRecorder> audio_file_recorder_;
 
   // FineAudioBuffer takes an AudioDeviceBuffer which delivers audio data
   // in chunks of 10ms. It then allows for this data to be pulled in

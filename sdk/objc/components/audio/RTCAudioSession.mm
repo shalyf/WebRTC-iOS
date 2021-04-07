@@ -24,7 +24,7 @@
 NSString *const kRTCAudioSessionErrorDomain = @"org.webrtc.RTC_OBJC_TYPE(RTCAudioSession)";
 NSInteger const kRTCAudioSessionErrorLockRequired = -1;
 NSInteger const kRTCAudioSessionErrorConfiguration = -2;
-NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
+NSString *const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 
 @interface RTC_OBJC_TYPE (RTCAudioSession)
 () @property(nonatomic,
@@ -136,10 +136,17 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
                       "  outputVolume: %f\n"
                       "}";
   NSString *description = [NSString stringWithFormat:format,
-      self.category, (long)self.categoryOptions, self.mode,
-      self.isActive, self.sampleRate, self.IOBufferDuration,
-      self.outputNumberOfChannels, self.inputNumberOfChannels,
-      self.outputLatency, self.inputLatency, self.outputVolume];
+                                                     self.category,
+                                                     (long)self.categoryOptions,
+                                                     self.mode,
+                                                     self.isActive,
+                                                     self.sampleRate,
+                                                     self.IOBufferDuration,
+                                                     self.outputNumberOfChannels,
+                                                     self.inputNumberOfChannels,
+                                                     self.outputLatency,
+                                                     self.inputLatency,
+                                                     self.outputVolume];
   return description;
 }
 
@@ -289,10 +296,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
     return;
   }
   @synchronized(self) {
-    _delegates.erase(std::remove(_delegates.begin(),
-                                 _delegates.end(),
-                                 delegate),
-                     _delegates.end());
+    _delegates.erase(std::remove(_delegates.begin(), _delegates.end(), delegate), _delegates.end());
     [self removeZeroedDelegates];
   }
 }
@@ -415,8 +419,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 
 // TODO(tkchin): Simplify the amount of locking happening here. Likely that we
 // can just do atomic increments / decrements.
-- (BOOL)setActive:(BOOL)active
-            error:(NSError **)outError {
+- (BOOL)setActive:(BOOL)active error:(NSError **)outError {
   if (![self checkLock:outError]) {
     return NO;
   }
@@ -429,8 +432,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   BOOL isActive = self.isActive;
   // Keep a local error so we can log it.
   NSError *error = nil;
-  BOOL shouldSetActive =
-      (active && !isActive) || (!active && isActive && activationCount == 1);
+  BOOL shouldSetActive = (active && !isActive) || (!active && isActive && activationCount == 1);
   // Attempt to activate if we're not active.
   // Attempt to deactivate if we're active and it's the last unbalanced call.
   if (shouldSetActive) {
@@ -441,9 +443,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
     // option.
     AVAudioSessionSetActiveOptions options =
         active ? 0 : AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation;
-    success = [session setActive:active
-                     withOptions:options
-                           error:&error];
+    success = [session setActive:active withOptions:options error:&error];
     if (outError) {
       *outError = error;
     }
@@ -461,8 +461,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
     }
     [self notifyDidSetActive:active];
   } else {
-    RTCLogError(@"Failed to setActive:%d. Error: %@",
-                active, error.localizedDescription);
+    RTCLogError(@"Failed to setActive:%d. Error: %@", active, error.localizedDescription);
     [self notifyFailedToSetActive:active error:error];
   }
   // Decrement activation count on deactivation whether or not it succeeded.
@@ -503,23 +502,20 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   return [self.session setPreferredSampleRate:sampleRate error:outError];
 }
 
-- (BOOL)setPreferredIOBufferDuration:(NSTimeInterval)duration
-                               error:(NSError **)outError {
+- (BOOL)setPreferredIOBufferDuration:(NSTimeInterval)duration error:(NSError **)outError {
   if (![self checkLock:outError]) {
     return NO;
   }
   return [self.session setPreferredIOBufferDuration:duration error:outError];
 }
 
-- (BOOL)setPreferredInputNumberOfChannels:(NSInteger)count
-                                    error:(NSError **)outError {
+- (BOOL)setPreferredInputNumberOfChannels:(NSInteger)count error:(NSError **)outError {
   if (![self checkLock:outError]) {
     return NO;
   }
   return [self.session setPreferredInputNumberOfChannels:count error:outError];
 }
-- (BOOL)setPreferredOutputNumberOfChannels:(NSInteger)count
-                                     error:(NSError **)outError {
+- (BOOL)setPreferredOutputNumberOfChannels:(NSInteger)count error:(NSError **)outError {
   if (![self checkLock:outError]) {
     return NO;
   }
@@ -534,8 +530,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   return [self.session overrideOutputAudioPort:portOverride error:outError];
 }
 
-- (BOOL)setPreferredInput:(AVAudioSessionPortDescription *)inPort
-                    error:(NSError **)outError {
+- (BOOL)setPreferredInput:(AVAudioSessionPortDescription *)inPort error:(NSError **)outError {
   if (![self checkLock:outError]) {
     return NO;
   }
@@ -558,11 +553,28 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   return [self.session setOutputDataSource:dataSource error:outError];
 }
 
+- (void)startFileRecording:(NSString *)destinationPath {
+  for (auto delegate : self.delegates) {
+    SEL sel = @selector(audioSessionDidStartFileRecording:destination:);
+    if ([delegate respondsToSelector:sel]) {
+      [delegate audioSessionDidStartFileRecording:self destination:[destinationPath cStringUsingEncoding:[NSString defaultCStringEncoding]]];
+    }
+  }
+}
+
+- (void)stopFileRecording {
+  for (auto delegate : self.delegates) {
+    SEL sel = @selector(audioSessionDidStopFileRecording:);
+    if ([delegate respondsToSelector:sel]) {
+      [delegate audioSessionDidStopFileRecording:self];
+    }
+  }
+}
+
 #pragma mark - Notifications
 
 - (void)handleInterruptionNotification:(NSNotification *)notification {
-  NSNumber* typeNumber =
-      notification.userInfo[AVAudioSessionInterruptionTypeKey];
+  NSNumber *typeNumber = notification.userInfo[AVAudioSessionInterruptionTypeKey];
   AVAudioSessionInterruptionType type =
       (AVAudioSessionInterruptionType)typeNumber.unsignedIntegerValue;
   switch (type) {
@@ -576,12 +588,9 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
       RTCLog(@"Audio session interruption ended.");
       self.isInterrupted = NO;
       [self updateAudioSessionAfterEvent];
-      NSNumber *optionsNumber =
-          notification.userInfo[AVAudioSessionInterruptionOptionKey];
-      AVAudioSessionInterruptionOptions options =
-          optionsNumber.unsignedIntegerValue;
-      BOOL shouldResume =
-          options & AVAudioSessionInterruptionOptionShouldResume;
+      NSNumber *optionsNumber = notification.userInfo[AVAudioSessionInterruptionOptionKey];
+      AVAudioSessionInterruptionOptions options = optionsNumber.unsignedIntegerValue;
+      BOOL shouldResume = options & AVAudioSessionInterruptionOptionShouldResume;
       [self notifyDidEndInterruptionWithShouldResumeSession:shouldResume];
       break;
     }
@@ -590,8 +599,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 
 - (void)handleRouteChangeNotification:(NSNotification *)notification {
   // Get reason for current route change.
-  NSNumber* reasonNumber =
-      notification.userInfo[AVAudioSessionRouteChangeReasonKey];
+  NSNumber *reasonNumber = notification.userInfo[AVAudioSessionRouteChangeReasonKey];
   AVAudioSessionRouteChangeReason reason =
       (AVAudioSessionRouteChangeReason)reasonNumber.unsignedIntegerValue;
   RTCLog(@"Audio route changed:");
@@ -606,8 +614,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
       RTCLog(@"Audio route changed: OldDeviceUnavailable");
       break;
     case AVAudioSessionRouteChangeReasonCategoryChange:
-      RTCLog(@"Audio route changed: CategoryChange to :%@",
-             self.session.category);
+      RTCLog(@"Audio route changed: CategoryChange to :%@", self.session.category);
       break;
     case AVAudioSessionRouteChangeReasonOverride:
       RTCLog(@"Audio route changed: Override");
@@ -622,11 +629,10 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
       RTCLog(@"Audio route changed: RouteConfigurationChange");
       break;
   }
-  AVAudioSessionRouteDescription* previousRoute =
+  AVAudioSessionRouteDescription *previousRoute =
       notification.userInfo[AVAudioSessionRouteChangePreviousRouteKey];
   // Log previous route configuration.
-  RTCLog(@"Previous route: %@\nCurrent route:%@",
-         previousRoute, self.session.currentRoute);
+  RTCLog(@"Previous route: %@\nCurrent route:%@", previousRoute, self.session.currentRoute);
   [self notifyDidChangeRouteWithReason:reason previousRoute:previousRoute];
 }
 
@@ -646,8 +652,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   // TODO(henrika): just adding logs here for now until we know if we are ever
   // see this notification and might be affected by it or if further actions
   // are required.
-  NSNumber *typeNumber =
-      notification.userInfo[AVAudioSessionSilenceSecondaryAudioHintTypeKey];
+  NSNumber *typeNumber = notification.userInfo[AVAudioSessionSilenceSecondaryAudioHintTypeKey];
   AVAudioSessionSilenceSecondaryAudioHintType type =
       (AVAudioSessionSilenceSecondaryAudioHintType)typeNumber.unsignedIntegerValue;
   switch (type) {
@@ -676,14 +681,11 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 #pragma mark - Private
 
 + (NSError *)lockError {
-  NSDictionary *userInfo = @{
-    NSLocalizedDescriptionKey:
-        @"Must call lockForConfiguration before calling this method."
-  };
-  NSError *error =
-      [[NSError alloc] initWithDomain:kRTCAudioSessionErrorDomain
-                                 code:kRTCAudioSessionErrorLockRequired
-                             userInfo:userInfo];
+  NSDictionary *userInfo =
+      @{NSLocalizedDescriptionKey : @"Must call lockForConfiguration before calling this method."};
+  NSError *error = [[NSError alloc] initWithDomain:kRTCAudioSessionErrorDomain
+                                              code:kRTCAudioSessionErrorLockRequired
+                                          userInfo:userInfo];
   return error;
 }
 
@@ -703,11 +705,10 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 
 - (void)removeZeroedDelegates {
   @synchronized(self) {
-    _delegates.erase(
-        std::remove_if(_delegates.begin(),
-                       _delegates.end(),
-                       [](id delegate) -> bool { return delegate == nil; }),
-        _delegates.end());
+    _delegates.erase(std::remove_if(_delegates.begin(),
+                                    _delegates.end(),
+                                    [](id delegate) -> bool { return delegate == nil; }),
+                     _delegates.end());
   }
 }
 
@@ -743,8 +744,8 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   @synchronized(self) {
     if (_isInterrupted == isInterrupted) {
       return;
-   }
-   _isInterrupted = isInterrupted;
+    }
+    _isInterrupted = isInterrupted;
   }
 }
 
@@ -799,8 +800,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   RTC_OBJC_TYPE(RTCAudioSessionConfiguration) *webRTCConfig =
       [RTC_OBJC_TYPE(RTCAudioSessionConfiguration) webRTCConfiguration];
   if (![self setConfiguration:webRTCConfig active:YES error:&error]) {
-    RTCLogError(@"Failed to set WebRTC audio configuration: %@",
-                error.localizedDescription);
+    RTCLogError(@"Failed to set WebRTC audio configuration: %@", error.localizedDescription);
     // Do not call setActive:NO if setActive:YES failed.
     if (outError) {
       *outError = error;
@@ -831,13 +831,11 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   double sessionSampleRate = self.sampleRate;
   double preferredSampleRate = webRTCConfig.sampleRate;
   if (sessionSampleRate != preferredSampleRate) {
-    RTCLogWarning(
-        @"Current sample rate (%.2f) is not the preferred rate (%.2f)",
-        sessionSampleRate, preferredSampleRate);
-    if (![self setPreferredSampleRate:sessionSampleRate
-                                error:&error]) {
-      RTCLogError(@"Failed to set preferred sample rate: %@",
-                  error.localizedDescription);
+    RTCLogWarning(@"Current sample rate (%.2f) is not the preferred rate (%.2f)",
+                  sessionSampleRate,
+                  preferredSampleRate);
+    if (![self setPreferredSampleRate:sessionSampleRate error:&error]) {
+      RTCLogError(@"Failed to set preferred sample rate: %@", error.localizedDescription);
       if (outError) {
         *outError = error;
       }
@@ -861,8 +859,8 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 }
 
 - (NSError *)configurationErrorWithDescription:(NSString *)description {
-  NSDictionary* userInfo = @{
-    NSLocalizedDescriptionKey: description,
+  NSDictionary *userInfo = @{
+    NSLocalizedDescriptionKey : description,
   };
   return [[NSError alloc] initWithDomain:kRTCAudioSessionErrorDomain
                                     code:kRTCAudioSessionErrorConfiguration
@@ -871,16 +869,15 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
 
 - (void)updateAudioSessionAfterEvent {
   BOOL shouldActivate = self.activationCount > 0;
-  AVAudioSessionSetActiveOptions options = shouldActivate ?
-      0 : AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation;
+  AVAudioSessionSetActiveOptions options =
+      shouldActivate ? 0 : AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation;
   NSError *error = nil;
-  if ([self.session setActive:shouldActivate
-                  withOptions:options
-                        error:&error]) {
+  if ([self.session setActive:shouldActivate withOptions:options error:&error]) {
     self.isActive = shouldActivate;
   } else {
     RTCLogError(@"Failed to set session active to %d. Error:%@",
-                shouldActivate, error.localizedDescription);
+                shouldActivate,
+                error.localizedDescription);
   }
 }
 
@@ -939,10 +936,7 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
       [self notifyDidChangeOutputVolume:newVolume.floatValue];
     }
   } else {
-    [super observeValueForKeyPath:keyPath
-                         ofObject:object
-                           change:change
-                          context:context];
+    [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
   }
 }
 
@@ -955,25 +949,21 @@ NSString * const kRTCAudioSessionOutputVolumeSelector = @"outputVolume";
   }
 }
 
-- (void)notifyDidEndInterruptionWithShouldResumeSession:
-    (BOOL)shouldResumeSession {
+- (void)notifyDidEndInterruptionWithShouldResumeSession:(BOOL)shouldResumeSession {
   for (auto delegate : self.delegates) {
     SEL sel = @selector(audioSessionDidEndInterruption:shouldResumeSession:);
     if ([delegate respondsToSelector:sel]) {
-      [delegate audioSessionDidEndInterruption:self
-                           shouldResumeSession:shouldResumeSession];
+      [delegate audioSessionDidEndInterruption:self shouldResumeSession:shouldResumeSession];
     }
   }
 }
 
 - (void)notifyDidChangeRouteWithReason:(AVAudioSessionRouteChangeReason)reason
-    previousRoute:(AVAudioSessionRouteDescription *)previousRoute {
+                         previousRoute:(AVAudioSessionRouteDescription *)previousRoute {
   for (auto delegate : self.delegates) {
     SEL sel = @selector(audioSessionDidChangeRoute:reason:previousRoute:);
     if ([delegate respondsToSelector:sel]) {
-      [delegate audioSessionDidChangeRoute:self
-                                    reason:reason
-                             previousRoute:previousRoute];
+      [delegate audioSessionDidChangeRoute:self reason:reason previousRoute:previousRoute];
     }
   }
 }

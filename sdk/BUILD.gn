@@ -255,6 +255,8 @@ if (is_ios || is_mac) {
           "objc/native/src/audio/voice_processing_audio_unit.mm",
           "objc/native/src/audio/audio_buffer_source.h",
           "objc/native/src/audio/audio_buffer_source.cc",
+          "objc/native/src/audio/audio_file_recorder.h",
+          "objc/native/src/audio/audio_file_recorder.mm",
         ]
 
         deps = [

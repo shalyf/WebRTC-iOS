@@ -101,4 +101,13 @@
   _observer->OnChangedOutputVolume();
 }
 
+- (void)audioSessionDidStartFileRecording:(RTC_OBJC_TYPE(RTCAudioSession) *)audioSession
+                               destination:(const char *)destinationPath {
+     _observer->OnStartFileRecording(destinationPath);
+}
+
+- (void)audioSessionDidStopFileRecording:(RTC_OBJC_TYPE(RTCAudioSession) *)session {
+    _observer->OnStopFileRecording();
+}
+
 @end
