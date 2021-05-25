@@ -14,33 +14,53 @@
 echo "Build webrtc"
 tools_webrtc/ios/build_ios_libs.sh --output-dir out_ios_libs
 
+ret=$?
+if [[ $ret != 0 ]]; then
+  echo "Build failed."
+  exit $ret
+fi
+
 cd out_ios_libs
 
+echo "Hack arm64 framework from device to work on arm64 simulator"
+rm -rf arm64_simulator_libs
+mkdir arm64_simulator_libs
+cp -rf arm64_libs/WebRTC.framework arm64_simulator_libs
+lipo -thin arm64 arm64_simulator_libs/WebRTC.framework/WebRTC -output arm64_simulator_libs/WebRTC.framework/WebRTC.arm64
+../arm64-to-sim arm64_simulator_libs/WebRTC.framework/WebRTC.arm64
+mv -f arm64_simulator_libs/WebRTC.framework/WebRTC.arm64 arm64_simulator_libs/WebRTC.framework/WebRTC
+
 echo "Merge simulator binarys"
-rm -rf x86_64_libs
-mkdir x86_64_libs
-cp -rf x64_libs/WebRTC.framework x86_64_libs
-rm x86_64_libs/WebRTC.framework/WebRTC
+rm -rf simulator_libs
+mkdir simulator_libs
+cp -rf x64_libs/WebRTC.framework simulator_libs
+rm simulator_libs/WebRTC.framework/WebRTC
 lipo -create \
+  arm64_simulator_libs/WebRTC.framework/WebRTC \
   x64_libs/WebRTC.framework/WebRTC \
   x86_libs/WebRTC.framework/WebRTC \
-  -output x86_64_libs/WebRTC.framework/WebRTC
+  -output simulator_libs/WebRTC.framework/WebRTC
 
 echo "Merge ios binarys"
-rm -rf arm64_arm_libs
-mkdir arm64_arm_libs
-cp -rf arm64_libs/WebRTC.framework arm64_arm_libs
-rm arm64_arm_libs/WebRTC.framework/WebRTC
+rm -rf device_libs
+mkdir device_libs
+cp -rf arm64_libs/WebRTC.framework device_libs
+rm device_libs/WebRTC.framework/WebRTC
 lipo -create \
   arm64_libs/WebRTC.framework/WebRTC \
   arm_libs/WebRTC.framework/WebRTC \
-  -output arm64_arm_libs/WebRTC.framework/WebRTC
+  -output device_libs/WebRTC.framework/WebRTC
 
 echo "Create xcframework"
 rm -rf WebRTC.xcframework
 xcodebuild -create-xcframework \
-	-framework x86_64_libs/WebRTC.framework \
-	-framework arm64_arm_libs/WebRTC.framework \
+	-framework simulator_libs/WebRTC.framework \
+	-framework device_libs/WebRTC.framework \
 	-output WebRTC.xcframework
+
+# remove temporary dirs
+rm -rf arm64_simulator_libs
+rm -rf simulator_libs
+rm -rf device_libs
 
 echo "Done!"

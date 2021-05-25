@@ -15,6 +15,6 @@
 
 tools_webrtc/ios/build_ios_libs.sh --arch arm64 --output-dir out_ios_debug
 
-rm -rf /Users/yii/Documents/Projects/RemoteSupport/WebRTCKit/Frameworks/WebRTC.framework 
+#rm -rf /Users/yii/Documents/Projects/RemoteSupport/WebRTCKit/Frameworks/WebRTC.framework 
 
-cp -rf /Users/yii/Documents/webrtc/webrtc/src/out_ios_debug/WebRTC.framework /Users/yii/Documents/Projects/RemoteSupport/WebRTCKit/Frameworks/
+#cp -rf /Users/yii/Documents/webrtc/webrtc/src/out_ios_debug/WebRTC.framework /Users/yii/Documents/Projects/RemoteSupport/WebRTCKit/Frameworks/
