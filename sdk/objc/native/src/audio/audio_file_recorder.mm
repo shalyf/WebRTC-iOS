@@ -24,6 +24,8 @@ AudioFileRecorder::AudioFileRecorder(std::string destinationPath,
 AudioFileRecorder::~AudioFileRecorder() {}
 
 void AudioFileRecorder::StartRecording() {
+  webrtc::MutexLock lock(&recording_mutex_);
+
   AudioStreamBasicDescription asbd = {};
   asbd.mSampleRate = sampleRate_;
   asbd.mFormatID = destinationFormatID_;
@@ -81,11 +83,13 @@ void AudioFileRecorder::StartRecording() {
 }
 
 void AudioFileRecorder::StopRecording() {
+  webrtc::MutexLock lock(&recording_mutex_);
   if (destinationFile_) ExtAudioFileDispose(destinationFile_);
   running_ = false;
 }
 
 void AudioFileRecorder::AppendAudioBufferList(const AudioBufferList *abl, UInt32 numberOfFrames) {
+  webrtc::MutexLock lock(&recording_mutex_);
   if (!running_ || !destinationFile_) return;
   OSStatus result = ExtAudioFileWrite(destinationFile_, numberOfFrames, abl);
   if (result != noErr) RTCLog(@"ExtAudioFileWrite failed!");

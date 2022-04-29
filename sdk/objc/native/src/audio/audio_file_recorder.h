@@ -5,6 +5,7 @@
 #include <AudioToolbox/AudioToolbox.h>
 #include <Foundation/Foundation.h>
 #include <iostream>
+#include "rtc_base/synchronization/mutex.h"
 
 namespace webrtc {
 
@@ -24,10 +25,12 @@ class AudioFileRecorder {
  private:
   NSString *destinationPath_;
   AudioFormatID destinationFormatID_;
-  ExtAudioFileRef destinationFile_;
+  ExtAudioFileRef destinationFile_ RTC_GUARDED_BY(recording_mutex_);
   double sampleRate_;
   size_t channels_;
   bool running_;
+
+  webrtc::Mutex recording_mutex_;
 };
 
 }
