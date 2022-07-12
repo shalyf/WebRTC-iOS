@@ -45,7 +45,7 @@ void AudioFileRecorder::StartRecording() {
   // Create the destination audio file
   result = ExtAudioFileCreateWithURL(
       (__bridge CFURLRef _Nonnull)[NSURL fileURLWithPath:destinationPath_],
-      kAudioFileCAFType,
+      kAudioFileAAC_ADTSType,
       &asbd,
       NULL,
       kAudioFileFlags_EraseFile,
